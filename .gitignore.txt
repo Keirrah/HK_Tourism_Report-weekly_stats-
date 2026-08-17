@@ -1,0 +1,17 @@
+# 忽略数据输入与导出目录下的所有文件
+input/*
+output/*
+!.gitkeep
+
+# 忽略 Python 运行缓存与临时文件
+__pycache__/
+.ipynb_checkpoints/
+*.pyc
+
+# 忽略编辑器/系统配置文件
+.DS_Store
+.vscode/
+.idea/
+
+runfile.ipynb
+.ipynb_checkpoints/
