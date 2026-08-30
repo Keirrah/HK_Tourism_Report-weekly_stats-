@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Dashboard (Streamlit)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "streamlit",
+            "args": [
+                "run",
+                "${workspaceFolder}/dashboard.py"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

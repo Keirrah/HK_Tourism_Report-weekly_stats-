@@ -84,8 +84,8 @@ def load_data():
     df = pd.read_csv(RAW_FILE)
     df.columns = df.columns.str.strip()  # 去除列名空格
     
-    # 强制按香港本地格式（Day First: 日/月/年）解析日期
-    df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+    # ✅ 终极兼容写法：同时应对 13-08-2026, 12/8/2026 等所有混合格式，并强制 Day 在前 (日/月/年)
+    df["Date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
     df = df.dropna(subset=["Date"])
     
     # 填充与数值格式清洗
@@ -307,6 +307,27 @@ def format_dynamic_percentage(val):
 
     return formatted_str, is_positive, False
 
+def get_openpyxl_percentage_format(val):
+    """
+    辅助函数：根据数值大小动态返回 openpyxl 适用的 number_format 格式字符串。
+    保持你的动态精度逻辑（如果保留0位显示0%，则自动增加小数位数直到非0）。
+    """
+    if val == 0 or val is None or np.isnan(val):
+        return '0%'
+
+    abs_val = abs(val)
+    decimals = 0
+    while decimals <= 6:
+        formatted_str = f"{abs_val * 100:.{decimals}f}%"
+        if float(formatted_str.replace("%", "")) != 0:
+            break
+        decimals += 1
+
+    if decimals == 0:
+        return '0%'
+    else:
+        return '0.' + ('0' * decimals) + '%'
+
 
 def export_styled_excel(df, weeks, output_file):
     wb = openpyxl.Workbook()
@@ -404,30 +425,37 @@ def export_styled_excel(df, weeks, output_file):
             if col_idx in [3, 6, 9, 10]:
                 cell.number_format = "#,##0"
 
-            # Share 格式 (Col 4, 7)
+            # Share 格式 (Col 4, 7) —— 修复为真实数值，支持 Excel Sum
             elif col_idx in [4, 7]:
                 val = cell.value
-                if is_total_row or val is None:
+                if is_total_row or val is None or np.isnan(val):
                     cell.value = "-"
+                    cell.number_format = '@'  # 文本格式
                 else:
-                    num_str, _, is_zero = format_dynamic_percentage(val)
-                    cell.value = num_str
+                    # 保留真实浮点数值，供 Excel 框选求和 (Sum)
+                    cell.value = float(val)
+                    cell.number_format = get_openpyxl_percentage_format(val)
 
-            # WoW % 格式化逻辑 (Col 5, 8) —— 新增加强版
+            # WoW % 格式化逻辑 (Col 5, 8) —— 保持箭头与颜色，同时保留数值属性
             elif col_idx in [5, 8]:
                 val = cell.value
-                if val is not None:
-                    num_str, is_positive, is_zero = format_dynamic_percentage(val)
+                if val is not None and not np.isnan(val):
+                    val_float = float(val)
+                    cell.value = val_float
+                    num_format_str = get_openpyxl_percentage_format(val_float)
 
-                    if is_zero:
-                        cell.value = "0%"
+                    if val_float == 0:
+                        cell.number_format = num_format_str
                         cell.font = font_bold if is_total_row else font_regular
-                    elif is_positive:
-                        cell.value = f"↑{num_str}"
+                    elif val_float > 0:
+                        # 使用 Excel 自定义格式在前面加上 ↑ 符号，同时不破坏数字属性
+                        cell.number_format = f'"↑"{num_format_str}'
                         cell.font = font_blue_bold if is_total_row else font_blue_regular
                     else:
-                        cell.value = f"↓{num_str}"
+                        # 负数时 Excel 会自动带负号，加上 ↓ 符号
+                        cell.number_format = f'"↓"{num_format_str}'
                         cell.font = font_red_bold if is_total_row else font_red_regular
+
 
     # 4. 合并单元格
     hksz_rows = [r for r in range(3, len(df) + 3) if ws.cell(row=r, column=1).value == "HK-SZ"]

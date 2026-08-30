@@ -47,7 +47,8 @@ def fetch_latest_immd_data(output_dir=DEFAULT_INPUT_DIR, filename=DEFAULT_FILE_N
             # 校验下载下来的 CSV 日期
             df = pd.read_csv(file_path)
             df.columns = df.columns.str.strip()
-            df["Date"] = pd.to_datetime(df["Date"], format="mixed", errors="coerce")
+            df["Date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
+            df = df.dropna(subset=["Date"])
             max_date = df["Date"].max()
 
             print(f"✅ [Downloader] 下载成功！")
