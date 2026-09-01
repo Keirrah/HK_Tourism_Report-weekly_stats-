@@ -54,6 +54,7 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 13px;
         background-color: #ffffff;
+        margin-top: 10px;
     }
     .report-table th {
         background-color: #1E5631;
@@ -70,7 +71,13 @@ st.markdown("""
     }
     .report-table td:nth-child(1), .report-table td:nth-child(2) { text-align: left; }
     .report-table tr:hover { background-color: #f1f3f5; }
-    .report-table .total-row { font-weight: bold; background-color: #e8f5e9; }
+    /* Grand Total 专属醒目高亮底色 */
+    .report-table .total-row { 
+        font-weight: bold; 
+        background-color: #e8f5e9 !important;
+        border-top: 2px solid #1E5631;
+        border-bottom: 2px solid #1E5631;
+    }
     .wow-up { color: #0056b3; font-weight: bold; }
     .wow-down { color: #d9534f; font-weight: bold; }
     </style>
@@ -135,7 +142,7 @@ for _, row in week_stats.iterrows():
         status = f"Partial Week ( {row['Days_Count']} days: ~{row['Actual_Max'].strftime('%m/%d')})"
     week_options.append(f"{s_str} ~ {e_str} [{status}]")
 
-# 默认定位到最新出现的周（哪怕不完整也能直接展示）
+# 默认定位到最新出现的周
 st.sidebar.subheader("📅 Analysis Period Selection")
 selected_base_week_str = st.sidebar.selectbox("Select Base Week (Current Week):", week_options, index=0)
 
@@ -186,9 +193,9 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
-# 5. 柱形图（带精简数值标签，不拥挤）
+# 5. 每日对比柱形图 (Mainland Arrival + Local Departure)
 # ---------------------------------------------------------
-st.subheader("🗓️ Comparison within the Weeks")
+st.subheader("🗓️ Daily Comparison within the Weeks")
 
 def get_daily_trend(df_sub, label):
     arr = df_sub[df_sub["Arrival / Departure"] == "Arrival"].groupby("Date")["Mainland Visitors"].sum().reset_index()
@@ -205,23 +212,41 @@ df_overlay = pd.concat([df_base_daily, df_comp_daily]).sort_values("DayOfWeek")
 day_map = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
 df_overlay['DayLabel'] = df_overlay['DayOfWeek'].map(day_map)
 
-# 动态格式化柱子上的文本显示（转为 k / 千，保持页面整洁）
-df_overlay['Text_Label'] = df_overlay['Mainland Visitors'].apply(lambda x: f"{x/1000:.1f}k" if x >= 1000 else f"{x:.0f}")
+# 精简数值标签 (千 / k)
+df_overlay['Mainland_Label'] = df_overlay['Mainland Visitors'].apply(lambda x: f"{x/1000:.1f}k" if x >= 1000 else f"{x:.0f}")
+df_overlay['Local_Label'] = df_overlay['Hong Kong Residents'].apply(lambda x: f"{x/1000:.1f}k" if x >= 1000 else f"{x:.0f}")
 
-fig_overlay = px.bar(
+# 图表 1: Mainland Arrival Daily Comparison
+fig_mainland = px.bar(
     df_overlay, 
     x="DayLabel", 
     y="Mainland Visitors", 
     color="Period", 
     barmode="group",
-    text="Text_Label",  # 标出柱子具体数据
-    title="Mainland Arrival Daily Comparison (Base Week vs Comparison Week)",
+    text="Mainland_Label",
+    title=" Mainland Arrival Daily Comparison (Base Week vs Comparison Week)",
     color_discrete_map={"Base Week": "#1E5631", "Comparison Week": "#A2C4C9"},
-    labels={"DayLabel": "Day", "Mainland Visitors": "No.", "Period": "Time"}
+    labels={"DayLabel": "Day", "Mainland Visitors": "Passengers", "Period": "Time"}
 )
-fig_overlay.update_traces(textposition='outside')  # 标签放置在柱子上方
-fig_overlay.update_layout(height=420, hovermode="x unified", yaxis_title="人次")
-st.plotly_chart(fig_overlay, use_container_width=True)
+fig_mainland.update_traces(textposition='outside')
+fig_mainland.update_layout(height=380, hovermode="x unified", yaxis_title="人次")
+st.plotly_chart(fig_mainland, use_container_width=True)
+
+# 图表 2: Local Departure Daily Comparison
+fig_local = px.bar(
+    df_overlay, 
+    x="DayLabel", 
+    y="Hong Kong Residents", 
+    color="Period", 
+    barmode="group",
+    text="Local_Label",
+    title=" Local Departure Daily Comparison (Base Week vs Comparison Week)",
+    color_discrete_map={"Base Week": "#2B5B84", "Comparison Week": "#90B4CE"},
+    labels={"DayLabel": "Day", "Hong Kong Residents": "Passengers", "Period": "Time"}
+)
+fig_local.update_traces(textposition='outside')
+fig_local.update_layout(height=380, hovermode="x unified", yaxis_title="人次")
+st.plotly_chart(fig_local, use_container_width=True)
 
 
 # ---------------------------------------------------------
@@ -257,7 +282,7 @@ st.plotly_chart(fig_macro, use_container_width=True)
 
 
 # ---------------------------------------------------------
-# 7. 数据表格（完全对齐 Output 的箭头与红蓝颜色标注）
+# 7. 数据表格 (带日期区间说明 + Grand Total 特殊高亮底色)
 # ---------------------------------------------------------
 st.subheader("📋 Weekly Report Data Verification Table")
 
@@ -275,16 +300,28 @@ report_df = calculate_metrics(report_df)
 report_df = sort_report(report_df)
 report_df = add_total(report_df)
 
-# 构建带 HTML/CSS 箭头的表格数据
-def render_custom_table(df):
-    html_code = '<table class="report-table"><thead><tr>'
+# 构建带日期与 HTML/CSS 箭头的自定义数据表格
+# 构建带日期与 HTML/CSS 箭头的自定义数据表格
+def render_custom_table(df, b_start, b_end, c_start, c_end):
+    base_date_str = f"{b_start.strftime('%d/%m/%Y')} - {b_end.strftime('%d/%m/%Y')}"
+    comp_date_str = f"{c_start.strftime('%d/%m/%Y')} - {c_end.strftime('%d/%m/%Y')}"
+
+    html_code = f"""
+    <div style="margin-bottom: 8px; font-weight: bold; color: #1E5631;">
+        📅 Base Period: <span style="color:#000;">{base_date_str}</span> | 
+        Comparison Period (Audit): <span style="color:#000;">{comp_date_str}</span>
+    </div>
+    <table class="report-table">
+        <thead>
+            <tr>
+    """
     headers = ["Group", "Display Name", "Mainland Arrivals", "Arrival Share", "Arrival WoW %", "Local Departures", "Departure Share", "Departure WoW %"]
     for h in headers:
         html_code += f'<th>{h}</th>'
     html_code += '</tr></thead><tbody>'
 
     for idx, row in df.iterrows():
-        is_total = (row["Group"] == "Total")
+        is_total = row["Group"] in ["Grand Total", "Total"]
         tr_class = ' class="total-row"' if is_total else ''
         html_code += f'<tr{tr_class}>'
         
@@ -299,13 +336,13 @@ def render_custom_table(df):
         arr_share = f"{row['Arrival Share']:.1%}" if pd.notnull(row['Arrival Share']) and not np.isnan(row['Arrival Share']) else "-"
         html_code += f'<td>{arr_share}</td>'
         
-        # Arrival WoW (带箭头与红蓝效果)
+        # Arrival WoW (仅保留箭头 + 绝对值百分比)
         arr_wow_val = row['Arrival WoW %']
         if pd.notnull(arr_wow_val) and not np.isnan(arr_wow_val):
             if arr_wow_val > 0:
-                arr_wow_html = f'<span class="wow-up">↑ {arr_wow_val:+.1%}</span>'
+                arr_wow_html = f'<span class="wow-up">↑ {abs(arr_wow_val):.1%}</span>'
             elif arr_wow_val < 0:
-                arr_wow_html = f'<span class="wow-down">↓ {arr_wow_val:+.1%}</span>'
+                arr_wow_html = f'<span class="wow-down">↓ {abs(arr_wow_val):.1%}</span>'
             else:
                 arr_wow_html = f'{arr_wow_val:.1%}'
         else:
@@ -320,13 +357,13 @@ def render_custom_table(df):
         dep_share = f"{row['Departure Share']:.1%}" if pd.notnull(row['Departure Share']) and not np.isnan(row['Departure Share']) else "-"
         html_code += f'<td>{dep_share}</td>'
         
-        # Departure WoW (带箭头与红蓝效果)
+        # Departure WoW (仅保留箭头 + 绝对值百分比)
         dep_wow_val = row['Departure WoW %']
         if pd.notnull(dep_wow_val) and not np.isnan(dep_wow_val):
             if dep_wow_val > 0:
-                dep_wow_html = f'<span class="wow-up">↑ {dep_wow_val:+.1%}</span>'
+                dep_wow_html = f'<span class="wow-up">↑ {abs(dep_wow_val):.1%}</span>'
             elif dep_wow_val < 0:
-                dep_wow_html = f'<span class="wow-down">↓ {dep_wow_val:+.1%}</span>'
+                dep_wow_html = f'<span class="wow-down">↓ {abs(dep_wow_val):.1%}</span>'
             else:
                 dep_wow_html = f'{dep_wow_val:.1%}'
         else:
@@ -338,4 +375,4 @@ def render_custom_table(df):
     html_code += '</tbody></table>'
     return html_code
 
-st.html(render_custom_table(report_df))
+st.html(render_custom_table(report_df, base_start, base_end, comp_start, comp_cutoff_date))

@@ -84,7 +84,7 @@ def load_data():
     df = pd.read_csv(RAW_FILE)
     df.columns = df.columns.str.strip()  # 去除列名空格
     
-    # ✅ 终极兼容写法：同时应对 13-08-2026, 12/8/2026 等所有混合格式，并强制 Day 在前 (日/月/年)
+    # 兼容写法：同时应对 13-08-2026, 12/8/2026 等所有混合格式，并强制 Day 在前 (日/月/年)
     df["Date"] = pd.to_datetime(df["Date"], format="mixed", dayfirst=True, errors="coerce")
     df = df.dropna(subset=["Date"])
     
@@ -117,7 +117,6 @@ def get_complete_week(df):
     previous_end = latest_start - pd.Timedelta(days=1)
     previous_start = previous_end - pd.Timedelta(days=6)
 
-    print(f"📅 [时间窗口校准]")
     print(f"   - 数据最新日期: {latest_date.strftime('%Y-%m-%d')}")
     print(f"   - 本周区间 (Mon-Sun): {latest_start.strftime('%Y-%m-%d')} ~ {latest_end.strftime('%Y-%m-%d')}")
     print(f"   - 上周区间 (Mon-Sun): {previous_start.strftime('%Y-%m-%d')} ~ {previous_end.strftime('%Y-%m-%d')}\n")
@@ -280,7 +279,7 @@ def add_total(df):
 
 
 # =====================================================
-# OpenPyXL Styling & Formatting Function (全表 WoW 箭头/动态精度升级版)
+# OpenPyXL Styling & Formatting Functions
 # =====================================================
 
 def format_dynamic_percentage(val):
@@ -421,11 +420,11 @@ def export_styled_excel(df, weeks, output_file):
             cell.alignment = align_left if col_idx <= 2 else align_center
 
 
-            # 人次格式 (Col 3, 6, 9, 10)
+            # 人次格式
             if col_idx in [3, 6, 9, 10]:
                 cell.number_format = "#,##0"
 
-            # Share 格式 (Col 4, 7) —— 修复为真实数值，支持 Excel Sum
+            # Share 格式  —— 修复为真实数值，支持 Excel Sum
             elif col_idx in [4, 7]:
                 val = cell.value
                 if is_total_row or val is None or np.isnan(val):
@@ -453,7 +452,7 @@ def export_styled_excel(df, weeks, output_file):
                         cell.font = font_blue_bold if is_total_row else font_blue_regular
                     else:
                         # 负数时 Excel 会自动带负号，加上 ↓ 符号
-                        cell.number_format = f'"↓"{num_format_str}'
+                        cell.number_format = f';"↓"{num_format_str}'
                         cell.font = font_red_bold if is_total_row else font_red_regular
 
 
@@ -518,7 +517,7 @@ def generate_report():
     return report, weeks
 
 # =====================================================
-# SOP 自动化数据断言检查 (SOP Checks)
+# SOP Checks
 # =====================================================
 
 def run_sop_checks(df):
