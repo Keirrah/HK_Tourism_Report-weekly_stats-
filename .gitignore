@@ -1,0 +1,13 @@
+# Bytecode and Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Input Data (Large raw CSVs downloaded dynamically)
+input/latest_immd_raw.csv
+input/backup_immd_raw.csv
+
+# macOS / OS system files
+.DS_Store
+.AppleDouble
+.LSOverride

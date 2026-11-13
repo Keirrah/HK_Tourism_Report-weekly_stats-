@@ -1,0 +1,28 @@
+@echo off
+chcp 65001 > nul
+cd /d "%~dp0"
+title 香港出入境数据报表自动化更新工具
+
+echo =======================================================
+echo 🇭🇰 香港出入境客流量数据报表 - 一键生成工具
+echo =======================================================
+echo.
+echo 正在运行 Python 数据处理与验证引擎，请稍候...
+echo.
+
+python weekly_report_data.py
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ❌ 运行出错，请检查数据文件或 Python 环境！
+    echo.
+    pause
+    exit /b %ERRORLEVEL%
+)
+
+echo.
+echo =======================================================
+echo ✅ 处理完成！Excel 报表已保存，Dashboard 已在浏览器打开。
+echo =======================================================
+echo.
+pause
