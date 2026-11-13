@@ -4,3 +4,4 @@ openpyxl
 requests
 plotly
 matplotlib
+seaborn
